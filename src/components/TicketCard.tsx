@@ -1,8 +1,8 @@
-import { Armchair, MapPin } from 'lucide-react-native';
+import { Armchair, MapPin, Trash2 } from 'lucide-react-native';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-export type TicketResult = 'WIN' | 'LOSE' | 'DRAW';
+export type TicketResult = 'WIN' | 'LOSE' | 'DRAW' | 'SCHEDULED';
 
 export interface TicketCardProps {
     date: string; // ISO string or formatted MM.DD
@@ -13,6 +13,7 @@ export interface TicketCardProps {
     stadium: string;
     seat: string;
     teamColor?: string;
+    onDelete?: () => void;
 }
 
 const TicketCard: React.FC<TicketCardProps> = ({
@@ -24,33 +25,71 @@ const TicketCard: React.FC<TicketCardProps> = ({
     stadium,
     seat,
     teamColor = '#F37321', // Default Hanwha Orange
+    onDelete,
 }) => {
-    // Parse date if needed, assuming formatted for now as per prompt "MM.DD"
-    // If ISO is passed, we might want to format it. 
-    // The prompt says "Left: Date (MM.DD), Day".
-    // I will accept pre-formatted or format it here.
-    // For simplicity, let's assume the prop `date` passed is already "MM.DD" or I format it.
-    // Let's assume the passed prop is "MM.DD" to keep component dumb, or standard Date string.
-    // Prompt says: "Data: Fetch from Firestore...".
-    // let's stick to formatted props for display.
+    // Parse formatted date string "yyyy-MM-dd (Day)" -> ["yyyy", "MM", "dd", "Day"]
+    // Expected format from new logic: "2024-04-02 (Tue)"
+    // If legacy format "MM.DD", handle gracefully or assume migration.
+    // Let's hold logic to parse basic parts.
+
+    let year = '', month = '', dayNum = '', weekday = '';
+
+    if (date.includes('-') && date.includes('(')) {
+        // "2024-04-02 (Tue)"
+        const parts = date.split(' '); // ["2024-04-02", "(Tue)"]
+        const dateParts = parts[0].split('-'); // ["2024", "04", "02"]
+        year = dateParts[0];
+        month = dateParts[1];
+        dayNum = dateParts[2];
+        weekday = parts[1].replace(/[()]/g, ''); // "Tue"
+    } else if (date.includes('.')) {
+        // Legacy "MM.DD" - Assuming current year or handled elsewhere, but prompts asked to split lines.
+        // Let's just try to split by dot.
+        const parts = date.split('.');
+        if (parts.length >= 2) {
+            month = parts[0];
+            dayNum = parts[1];
+            weekday = day; // Use day prop for weekday
+        }
+    } else {
+        // Fallback
+        month = '??';
+        dayNum = '??';
+        weekday = day;
+    }
+
+    const startYear = new Date().getFullYear().toString(); // Fallback if needed, but we rely on year grouping in parent.
 
     const getResultColor = (res: TicketResult) => {
         switch (res) {
-            case 'WIN': return '#D32F2F'; // Red for Win (KBO style - usually Win is red/prominent)
-            case 'LOSE': return '#1976D2'; // Blue for Lose
+            case 'WIN': return '#D32F2F';
+            case 'LOSE': return '#1976D2';
             case 'DRAW': return '#757575';
+            case 'SCHEDULED': return '#BBBBBB'; // Gray for scheduled
             default: return '#000';
         }
     };
 
+    const getResultText = (res: TicketResult) => {
+        switch (res) {
+            case 'WIN': return 'WIN';
+            case 'LOSE': return 'LOSE';
+            case 'DRAW': return 'DRAW'; // Requested "DRAW" if equal, or "무승부"? Prompt said "DRAW로 표현해줘"
+            case 'SCHEDULED': return '예정';
+            default: return res;
+        }
+    };
+
     const resultColor = getResultColor(result);
+    const resultText = getResultText(result);
 
     return (
         <View style={styles.container}>
             {/* Left Section: Date */}
             <View style={styles.leftSection}>
-                <Text style={[styles.dateText, { color: teamColor }]}>{date}</Text>
-                <Text style={styles.dayText}>{day}</Text>
+                <Text style={[styles.monthText, { color: teamColor }]}>{month}</Text>
+                <Text style={styles.dayNumText}>{dayNum}</Text>
+                <Text style={styles.weekdayText}>{weekday}</Text>
             </View>
 
             {/* Middle: Dashed Line */}
@@ -67,9 +106,16 @@ const TicketCard: React.FC<TicketCardProps> = ({
             <View style={styles.rightSection}>
                 <View style={styles.headerRow}>
                     <View style={[styles.resultBadge, { backgroundColor: resultColor }]}>
-                        <Text style={styles.resultText}>{result}</Text>
+                        <Text style={styles.resultText}>{resultText}</Text>
                     </View>
-                    <Text style={styles.scoreText}>{score}</Text>
+                    <View style={styles.scoreRow}>
+                        <Text style={styles.scoreText}>{score}</Text>
+                        {onDelete && (
+                            <TouchableOpacity onPress={onDelete} hitSlop={8}>
+                                <Trash2 size={16} color="#999" style={{ marginLeft: 8 }} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 <Text style={styles.matchupText}>{matchup}</Text>
@@ -106,21 +152,27 @@ const styles = StyleSheet.create({
         overflow: 'hidden', // for circles to look like cutouts if needed, but here we place them on top or standard white bg
     },
     leftSection: {
-        width: 90,
+        width: 100, // Slightly wider for 3 lines if needed
         justifyContent: 'center',
         alignItems: 'center',
         padding: 10,
         borderRightWidth: 0,
     },
-    dateText: {
+    monthText: {
         fontSize: 24,
-        fontWeight: '800',
+        fontWeight: '900',
+        marginBottom: -4, // Tighten spacing
     },
-    dayText: {
-        fontSize: 16,
-        color: '#888',
-        fontWeight: '600',
-        marginTop: 4,
+    dayNumText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#333',
+        marginBottom: 2,
+    },
+    weekdayText: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '500',
     },
     dividerContainer: {
         width: 20,
@@ -182,6 +234,10 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
+    },
+    scoreRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     matchupText: {
         fontSize: 20,

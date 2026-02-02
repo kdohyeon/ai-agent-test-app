@@ -5,12 +5,13 @@ import { getStorage } from 'firebase/storage';
 // import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBZJh0N_WrX90vNIcIvCqZwNmr0XS1ViJQ",
+  authDomain: "ticket-book-90ee2.firebaseapp.com",
+  projectId: "ticket-book-90ee2",
+  storageBucket: "ticket-book-90ee2.firebasestorage.app",
+  messagingSenderId: "59383435831",
+  appId: "1:59383435831:web:4fa7c58aeb001621cee5b2",
+  measurementId: "G-BB9M6CN222"
 };
 
 const app = initializeApp(firebaseConfig);

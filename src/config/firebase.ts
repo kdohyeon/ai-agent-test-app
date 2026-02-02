@@ -5,13 +5,13 @@ import { getStorage } from 'firebase/storage';
 // import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBZJh0N_WrX90vNIcIvCqZwNmr0XS1ViJQ",
-  authDomain: "ticket-book-90ee2.firebaseapp.com",
-  projectId: "ticket-book-90ee2",
-  storageBucket: "ticket-book-90ee2.firebasestorage.app",
-  messagingSenderId: "59383435831",
-  appId: "1:59383435831:web:4fa7c58aeb001621cee5b2",
-  measurementId: "G-BB9M6CN222"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);

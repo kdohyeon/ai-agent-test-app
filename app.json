@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Test",
-    "slug": "Test",
+    "name": "직관노트",
+    "slug": "baseball-ticketbook",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

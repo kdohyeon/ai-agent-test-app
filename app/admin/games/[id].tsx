@@ -101,15 +101,27 @@ export default function GameForm() {
 
             if (isNew) {
                 await addDoc(collection(db, 'games'), data);
-                Alert.alert('성공', '경기가 추가되었습니다.');
+                if (Platform.OS === 'web') {
+                    window.alert('경기가 추가되었습니다.');
+                } else {
+                    Alert.alert('성공', '경기가 추가되었습니다.');
+                }
             } else {
                 await updateDoc(doc(db, 'games', id as string), data);
-                Alert.alert('성공', '경기가 수정되었습니다.');
+                if (Platform.OS === 'web') {
+                    window.alert('경기가 수정되었습니다.');
+                } else {
+                    Alert.alert('성공', '경기가 수정되었습니다.');
+                }
             }
             router.back();
         } catch (e) {
             console.error(e);
-            Alert.alert('오류', '저장 실패');
+            if (Platform.OS === 'web') {
+                window.alert('저장 실패: ' + (e as any).message);
+            } else {
+                Alert.alert('오류', '저장 실패');
+            }
         } finally {
             setLoading(false);
         }

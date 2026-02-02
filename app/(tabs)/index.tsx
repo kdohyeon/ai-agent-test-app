@@ -199,7 +199,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>'{selectedYear}'년 기록이 없습니다.</Text>
+              <Text style={styles.emptyText}>&apos;{selectedYear}&apos;년 기록이 없습니다.</Text>
               <Text style={styles.emptySubText}>+ 버튼을 눌러 기록을 추가해보세요!</Text>
             </View>
           }

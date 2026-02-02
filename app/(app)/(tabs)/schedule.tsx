@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Game {

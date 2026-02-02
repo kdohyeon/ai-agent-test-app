@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Dimensions, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { TEAMS, Team } from '../constants/teams';
-import { useTheme } from '../context/ThemeContext';
+import { TEAMS, Team } from '../../constants/teams';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = (width - 48) / 2;
@@ -13,7 +13,7 @@ export default function OnboardingScreen() {
 
     const handleSelectTeam = async (teamId: string) => {
         await setTeam(teamId);
-        router.replace('/(tabs)');
+        router.replace('/');
     };
 
     const renderItem = ({ item }: { item: Team }) => (

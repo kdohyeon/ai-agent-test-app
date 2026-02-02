@@ -8,6 +8,7 @@ import { auth } from '@/src/config/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { FilterProvider } from '../context/FilterContext';
 import { ThemeProvider as TeamThemeProvider, useTheme } from '../context/ThemeContext';
 
 export const unstable_settings = {
@@ -70,7 +71,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <TeamThemeProvider>
-      <RootLayoutNav />
+      <FilterProvider>
+        <RootLayoutNav />
+      </FilterProvider>
     </TeamThemeProvider>
   );
 }

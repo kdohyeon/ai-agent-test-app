@@ -1,10 +1,13 @@
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TEAMS } from '@/constants/teams';
+import { useFilter } from '@/context/FilterContext';
 import { useTheme } from '@/context/ThemeContext';
-import { db } from '@/src/config/firebase';
+import { auth, db } from '@/src/config/firebase';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { addDoc, collection, getDocs, orderBy, query } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Game {
@@ -21,14 +24,76 @@ interface Game {
 
 export default function ScheduleScreen() {
     const [games, setGames] = useState<Game[]>([]);
+    const [filteredGames, setFilteredGames] = useState<Game[]>([]); // Games filtered by year
+    const [monthlyGames, setMonthlyGames] = useState<{ date: string; data: Game[] }[]>([]); // Games filtered by month
+    const [availableYears, setAvailableYears] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [recordedGameDates, setRecordedGameDates] = useState<Set<string>>(new Set());
+    const [months, setMonths] = useState<number[]>([]);
+    const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+
     const { selectedTeam } = useTheme();
+    const { selectedYear, setSelectedYear } = useFilter();
+    const router = useRouter();
 
     const primaryColor = selectedTeam?.primaryColor || '#000';
+
+    // Fetch duplicate check data when screen focuses
+    useFocusEffect(
+        useCallback(() => {
+            fetchRecordedGames();
+        }, [])
+    );
 
     useEffect(() => {
         fetchGames();
     }, []);
+
+    // Filter games when year/month changes
+    useEffect(() => {
+        if (!games.length) return;
+
+        // 1. Filter by Year
+        const yearFiltered = games.filter(g => g.date.startsWith(selectedYear.toString()));
+        setFilteredGames(yearFiltered);
+
+        // 2. Extract Months
+        const uniqueMonths = Array.from(new Set(yearFiltered.map(g => parseInt(g.date.split('-')[1]))))
+            .sort((a, b) => a - b);
+        setMonths(uniqueMonths);
+
+        // 3. Auto-select month if current selection invalid
+        if (!uniqueMonths.includes(selectedMonth) && uniqueMonths.length > 0) {
+            setSelectedMonth(uniqueMonths[0]);
+        }
+    }, [games, selectedYear]);
+
+    // Apply Month Filter
+    useEffect(() => {
+        if (!filteredGames.length) {
+            setMonthlyGames([]);
+            return;
+        }
+        const monthFiltered = filteredGames.filter(g => parseInt(g.date.split('-')[1]) === selectedMonth);
+        setMonthlyGames(groupGamesByDate(monthFiltered));
+    }, [filteredGames, selectedMonth]);
+
+    const fetchRecordedGames = async () => {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const q = query(
+            collection(db, 'records'),
+            where('userId', '==', user.uid)
+        );
+        const snapshot = await getDocs(q);
+        const dates = new Set<string>();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.date) dates.add(data.date.split(' ')[0]); // Store YYYY-MM-DD
+        });
+        setRecordedGameDates(dates);
+    };
 
     const fetchGames = async () => {
         setLoading(true);
@@ -48,6 +113,13 @@ export default function ScheduleScreen() {
             });
 
             setGames(fetchedGames);
+
+            // Extract available years from games
+            const years = Array.from(new Set(fetchedGames.map(g => g.date.split('-')[0]))).sort((a, b) => b.localeCompare(a));
+            // Ensure current year is always available
+            const currentYear = new Date().getFullYear().toString();
+            if (!years.includes(currentYear)) years.unshift(currentYear);
+            setAvailableYears(years);
         } catch (error) {
             console.error('Error fetching games: ', error);
             Alert.alert('오류', '데이터를 불러오는데 실패했습니다.');
@@ -60,46 +132,25 @@ export default function ScheduleScreen() {
     const seedData = async () => {
         try {
             const dummyGames = [
-                {
-                    date: '2024-04-01',
-                    time: '18:30',
-                    homeTeamId: 'hanwha',
-                    awayTeamId: 'lg',
-                    stadium: '한화생명 이글스파크',
-                    status: 'scheduled',
-                },
-                {
-                    date: '2024-04-02',
-                    time: '18:30',
-                    homeTeamId: 'kia',
-                    awayTeamId: 'lotte',
-                    stadium: '광주-기아 챔피언스 필드',
-                    status: 'scheduled',
-                },
-                {
-                    date: '2024-04-02',
-                    time: '18:30',
-                    homeTeamId: 'samsung',
-                    awayTeamId: 'kt',
-                    stadium: '대구 삼성 라이온즈 파크',
-                    status: 'scheduled',
-                },
-                {
-                    date: '2024-03-31',
-                    time: '14:00',
-                    homeTeamId: 'kiwoom',
-                    awayTeamId: 'doosan',
-                    stadium: '고척 스카이돔',
-                    status: 'finished',
-                    homeScore: 4,
-                    awayScore: 8,
-                },
+                // 2024 Data
+                { date: '2024-04-01', time: '18:30', homeTeamId: 'hanwha', awayTeamId: 'lg', stadium: '한화생명 이글스파크', status: 'scheduled' },
+                // 2025 Data
+                { date: '2025-05-05', time: '14:00', homeTeamId: 'doosan', awayTeamId: 'lg', stadium: '잠실 야구장', status: 'scheduled' },
+                { date: '2025-06-12', time: '18:30', homeTeamId: 'samsung', awayTeamId: 'kia', stadium: '대구 삼성 라이온즈 파크', status: 'scheduled' },
+                // 2026 Data
+                { date: '2026-03-23', time: '14:00', homeTeamId: 'lotte', awayTeamId: 'nc', stadium: '사직 야구장', status: 'scheduled' },
+                { date: '2026-07-15', time: '18:30', homeTeamId: 'kt', awayTeamId: 'ssg', stadium: '수원 KT 위즈 파크', status: 'scheduled' },
             ];
 
             for (const game of dummyGames) {
-                await addDoc(collection(db, 'games'), game);
+                // Check if already exists to avoid dupes in test
+                const q = query(collection(db, 'games'), where('date', '==', game.date), where('homeTeamId', '==', game.homeTeamId));
+                const snap = await getDocs(q);
+                if (snap.empty) {
+                    await addDoc(collection(db, 'games'), game);
+                }
             }
-            Alert.alert('성공', '테스트 데이터가 추가되었습니다.');
+            Alert.alert('성공', '2024, 2025, 2026 테스트 데이터가 추가되었습니다.');
             fetchGames();
         } catch (e) {
             console.error(e);
@@ -131,6 +182,7 @@ export default function ScheduleScreen() {
         const homeTeam = getTeamInfo(item.homeTeamId);
         const awayTeam = getTeamInfo(item.awayTeamId);
         const isToday = item.date === todayStr;
+        const isRecorded = recordedGameDates.has(item.date);
 
         return (
             <View style={[
@@ -169,6 +221,29 @@ export default function ScheduleScreen() {
                         <Text style={styles.teamName}>{homeTeam?.name}</Text>
                     </View>
                 </View>
+
+                {/* Add Record Button - Hidden if recorded */}
+                {!isRecorded && (
+                    <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: primaryColor }]}
+                        onPress={() => {
+                            router.push({
+                                pathname: '/new',
+                                params: {
+                                    gameDate: item.date,
+                                    homeTeamId: item.homeTeamId,
+                                    awayTeamId: item.awayTeamId,
+                                    stadium: item.stadium,
+                                    time: item.time,
+                                    homeScore: item.homeScore?.toString(), // Pass strings for params
+                                    awayScore: item.awayScore?.toString()
+                                }
+                            });
+                        }}
+                    >
+                        <IconSymbol name="plus" size={20} color="#fff" />
+                    </TouchableOpacity>
+                )}
             </View>
         );
     };
@@ -176,7 +251,11 @@ export default function ScheduleScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={[styles.title, { color: primaryColor }]}>경기 일정</Text>
+                {/* Year Display (Read-only) */}
+                <View style={styles.yearContainer}>
+                    <Text style={[styles.title, { color: primaryColor }]}>{selectedYear}년</Text>
+                </View>
+
                 {/* Dev only button */}
                 <TouchableOpacity onPress={seedData} style={styles.seedButton}>
                     <Text style={styles.seedButtonText}>+ Test Data</Text>
@@ -188,25 +267,57 @@ export default function ScheduleScreen() {
                     <ActivityIndicator size="large" color={primaryColor} />
                 </View>
             ) : (
-                <FlatList
-                    data={sections}
-                    keyExtractor={(item) => item.date}
-                    renderItem={({ item }) => (
-                        <View>
-                            <View style={styles.dateHeader}>
-                                <Text style={styles.dateText}>
-                                    {format(new Date(item.date), 'M월 d일 EEEE', { locale: ko })}
-                                </Text>
-                            </View>
-                            {item.data.map((game) => (
-                                <View key={game.id} style={styles.gameWrapper}>
-                                    {renderGameItem({ item: game })}
+                <View style={{ flex: 1 }}>
+                    {/* Month Selector: Fixed 3~10 */}
+                    <View style={styles.monthSelector}>
+                        <FlatList
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            data={[3, 4, 5, 6, 7, 8, 9, 10]}
+                            keyExtractor={(item) => item.toString()}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.monthChip,
+                                        selectedMonth === item && { backgroundColor: primaryColor }
+                                    ]}
+                                    onPress={() => setSelectedMonth(item)}
+                                >
+                                    <Text style={[
+                                        styles.monthText,
+                                        selectedMonth === item && { color: '#fff', fontWeight: 'bold' }
+                                    ]}>{item}월</Text>
+                                </TouchableOpacity>
+                            )}
+                            contentContainerStyle={styles.monthScroll}
+                        />
+                    </View>
+
+                    <FlatList
+                        data={monthlyGames}
+                        keyExtractor={(item) => item.date}
+                        renderItem={({ item }) => (
+                            <View>
+                                <View style={styles.dateHeader}>
+                                    <Text style={styles.dateText}>
+                                        {format(new Date(item.date), 'M월 d일 EEEE', { locale: ko })}
+                                    </Text>
                                 </View>
-                            ))}
-                        </View>
-                    )}
-                    contentContainerStyle={styles.listContent}
-                />
+                                {item.data.map((game) => (
+                                    <View key={game.id} style={styles.gameWrapper}>
+                                        {renderGameItem({ item: game })}
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                        contentContainerStyle={styles.listContent}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>등록된 경기가 없습니다.</Text>
+                            </View>
+                        }
+                    />
+                </View>
             )}
         </SafeAreaView>
     );
@@ -224,6 +335,10 @@ const styles = StyleSheet.create({
         borderBottomColor: '#eee',
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    yearContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
     title: {
@@ -246,6 +361,14 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingBottom: 20,
+    },
+    emptyContainer: {
+        padding: 40,
+        alignItems: 'center',
+    },
+    emptyText: {
+        color: '#999',
+        fontSize: 14,
     },
     dateHeader: {
         paddingHorizontal: 20,
@@ -350,5 +473,45 @@ const styles = StyleSheet.create({
         color: '#999',
         fontWeight: '600',
         paddingHorizontal: 4,
+    },
+    monthSelector: {
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    monthScroll: {
+        paddingHorizontal: 16,
+        gap: 8,
+    },
+    monthChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        backgroundColor: '#f5f5f5',
+    },
+    monthText: {
+        fontSize: 14,
+        color: '#666',
+    },
+    addButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 12,
+    },
+    recordedButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#ccc',
+        marginLeft: 12,
+    },
+    recordedText: {
+        fontSize: 12,
+        color: '#fff',
+        fontWeight: 'bold',
     },
 });

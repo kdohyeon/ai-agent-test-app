@@ -4,7 +4,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { auth, db } from '@/src/config/firebase';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { useFocusEffect, useNavigation } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
 import { addDoc, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
@@ -58,8 +58,29 @@ export default function NewRecordScreen() {
   // Track if data was auto-filled
   const [isAutoFilled, setIsAutoFilled] = useState(false);
   const [recordedGames, setRecordedGames] = useState<Set<string>>(new Set());
+  const params = useLocalSearchParams();
 
   const primaryColor = selectedTeam?.primaryColor || '#F37321';
+
+  // Handle params from Schedule or other sources
+  React.useEffect(() => {
+    if (params.gameDate) {
+      const gameData: Game = {
+        id: 'manual', // ID is not critical for filling form
+        date: params.gameDate as string,
+        time: params.time as string,
+        homeTeamId: params.homeTeamId as string,
+        awayTeamId: params.awayTeamId as string,
+        stadium: params.stadium as string,
+        homeScore: params.homeScore ? parseInt(params.homeScore as string) : undefined,
+        awayScore: params.awayScore ? parseInt(params.awayScore as string) : undefined,
+        status: (params.homeScore && params.awayScore) ? 'finished' : 'scheduled',
+      };
+
+      // Delay slightly to ensure UI is ready or just call it
+      handleSelectGame(gameData);
+    }
+  }, [params]);
 
   // Fetch recorded games
 
@@ -270,149 +291,169 @@ export default function NewRecordScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>새 기록 등록</Text>
 
-        <TouchableOpacity style={[styles.loadButton, { borderColor: primaryColor }]} onPress={openGameModal}>
-          <IconSymbol name="calendar" size={20} color={primaryColor} />
-          <Text style={[styles.loadButtonText, { color: primaryColor }]}>경기 일정에서 불러오기</Text>
-        </TouchableOpacity>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>날짜</Text>
-          <TextInput
-            style={[styles.input, isAutoFilled && styles.readOnlyInput]}
-            placeholder="yyyy-MM-dd (Day)"
-            value={formattedDate}
-            onChangeText={setFormattedDate}
-            editable={!isAutoFilled}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>원정팀</Text>
-            <TouchableOpacity
-              style={[
-                styles.teamSelectButton,
-                myTeamSide === 'AWAY' && { borderColor: primaryColor, backgroundColor: primaryColor + '10' }
-              ]}
-              onPress={() => setMyTeamSide('AWAY')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.teamSelectText, myTeamSide === 'AWAY' && { color: primaryColor, fontWeight: 'bold' }]}>
-                {awayTeam || 'Away'}
-              </Text>
-              {myTeamSide === 'AWAY' && (
-                <View style={[styles.badgeCheck, { backgroundColor: primaryColor }]}>
-                  <IconSymbol name="checkmark" size={12} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.centerVs, { paddingTop: 24 }]}>
-            <Text style={styles.vsText}>vs</Text>
-          </View>
-
-          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>홈팀</Text>
-            <TouchableOpacity
-              style={[
-                styles.teamSelectButton,
-                myTeamSide === 'HOME' && { borderColor: primaryColor, backgroundColor: primaryColor + '10' }
-              ]}
-              onPress={() => setMyTeamSide('HOME')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.teamSelectText, myTeamSide === 'HOME' && { color: primaryColor, fontWeight: 'bold' }]}>
-                {homeTeam || 'Home'}
-              </Text>
-              {myTeamSide === 'HOME' && (
-                <View style={[styles.badgeCheck, { backgroundColor: primaryColor }]}>
-                  <IconSymbol name="checkmark" size={12} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={styles.helperText}>* 응원하는 팀을 선택해주세요.</Text>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>점수</Text>
-          <View style={styles.scoreContainer}>
-            <View style={styles.scoreInputWrapper}>
-              <Text style={styles.scoreLabel}>원정</Text>
-              <TextInput
-                style={[styles.input, styles.scoreInput, isAutoFilled && styles.readOnlyInput]}
-                placeholder="0"
-                value={awayScore}
-                onChangeText={setAwayScore}
-                keyboardType="number-pad"
-                editable={!isAutoFilled}
-              />
-            </View>
-            <Text style={styles.scoreSeparator}>:</Text>
-            <View style={styles.scoreInputWrapper}>
-              <Text style={styles.scoreLabel}>홈</Text>
-              <TextInput
-                style={[styles.input, styles.scoreInput, isAutoFilled && styles.readOnlyInput]}
-                placeholder="0"
-                value={homeScore}
-                onChangeText={setHomeScore}
-                keyboardType="number-pad"
-                editable={!isAutoFilled}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>결과 (자동 계산)</Text>
-          <View style={[
-            styles.resultDisplay,
-            {
-              backgroundColor: result === 'WIN' ? '#D32F2F'
-                : result === 'LOSE' ? '#1976D2'
-                  : result === 'SCHEDULED' ? '#bbb'
-                    : '#757575'
-            }
-          ]}>
-            <Text style={styles.resultDisplayText}>
-              {result === 'SCHEDULED' ? '예정' : result}
+        {!isAutoFilled ? (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateText}>
+              등록할 경기를 선택해주세요.
             </Text>
+            <TouchableOpacity style={[styles.loadButton, { borderColor: primaryColor }]} onPress={openGameModal}>
+              <IconSymbol name="calendar" size={20} color={primaryColor} />
+              <Text style={[styles.loadButtonText, { color: primaryColor }]}>경기 일정에서 불러오기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.goScheduleButton}
+              onPress={() => navigation.navigate('schedule' as never)}
+            >
+              <Text style={styles.goScheduleText}>경기 일정 화면으로 이동</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        ) : (
+          <>
+            <TouchableOpacity style={[styles.loadButton, { borderColor: primaryColor }]} onPress={openGameModal}>
+              <IconSymbol name="calendar" size={20} color={primaryColor} />
+              <Text style={[styles.loadButtonText, { color: primaryColor }]}>경기 다시 선택하기</Text>
+            </TouchableOpacity>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>경기장</Text>
-          <TextInput
-            style={[styles.input, isAutoFilled && styles.readOnlyInput]}
-            placeholder="Stadium"
-            value={stadium}
-            onChangeText={setStadium}
-            editable={!isAutoFilled}
-          />
-        </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>날짜</Text>
+              <TextInput
+                style={[styles.input, isAutoFilled && styles.readOnlyInput]}
+                placeholder="yyyy-MM-dd (Day)"
+                value={formattedDate}
+                onChangeText={setFormattedDate}
+                editable={!isAutoFilled}
+              />
+            </View>
 
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>좌석 (직접 입력)</Text>
-          <TextInput
-            style={[styles.input, styles.activeInput]}
-            placeholder="예: 1루 응원석 105구역"
-            value={seat}
-            onChangeText={setSeat}
-            autoFocus={isAutoFilled}
-          />
-        </View>
+            <View style={styles.row}>
+              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.label}>원정팀</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.teamSelectButton,
+                    myTeamSide === 'AWAY' && { borderColor: primaryColor, backgroundColor: primaryColor + '10' }
+                  ]}
+                  onPress={() => setMyTeamSide('AWAY')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.teamSelectText, myTeamSide === 'AWAY' && { color: primaryColor, fontWeight: 'bold' }]}>
+                    {awayTeam || 'Away'}
+                  </Text>
+                  {myTeamSide === 'AWAY' && (
+                    <View style={[styles.badgeCheck, { backgroundColor: primaryColor }]}>
+                      <IconSymbol name="checkmark" size={12} color="#fff" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
 
-        <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: primaryColor }]}
-          onPress={handleSave}
-          disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>저장하기</Text>
-          )}
-        </TouchableOpacity>
+              <View style={[styles.centerVs, { paddingTop: 24 }]}>
+                <Text style={styles.vsText}>vs</Text>
+              </View>
+
+              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.label}>홈팀</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.teamSelectButton,
+                    myTeamSide === 'HOME' && { borderColor: primaryColor, backgroundColor: primaryColor + '10' }
+                  ]}
+                  onPress={() => setMyTeamSide('HOME')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.teamSelectText, myTeamSide === 'HOME' && { color: primaryColor, fontWeight: 'bold' }]}>
+                    {homeTeam || 'Home'}
+                  </Text>
+                  {myTeamSide === 'HOME' && (
+                    <View style={[styles.badgeCheck, { backgroundColor: primaryColor }]}>
+                      <IconSymbol name="checkmark" size={12} color="#fff" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={styles.helperText}>* 응원하는 팀을 선택해주세요.</Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>점수</Text>
+              <View style={styles.scoreContainer}>
+                <View style={styles.scoreInputWrapper}>
+                  <Text style={styles.scoreLabel}>원정</Text>
+                  <TextInput
+                    style={[styles.input, styles.scoreInput, isAutoFilled && styles.readOnlyInput]}
+                    placeholder="0"
+                    value={awayScore}
+                    onChangeText={setAwayScore}
+                    keyboardType="number-pad"
+                    editable={!isAutoFilled}
+                  />
+                </View>
+                <Text style={styles.scoreSeparator}>:</Text>
+                <View style={styles.scoreInputWrapper}>
+                  <Text style={styles.scoreLabel}>홈</Text>
+                  <TextInput
+                    style={[styles.input, styles.scoreInput, isAutoFilled && styles.readOnlyInput]}
+                    placeholder="0"
+                    value={homeScore}
+                    onChangeText={setHomeScore}
+                    keyboardType="number-pad"
+                    editable={!isAutoFilled}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>결과 (자동 계산)</Text>
+              <View style={[
+                styles.resultDisplay,
+                {
+                  backgroundColor: result === 'WIN' ? '#D32F2F'
+                    : result === 'LOSE' ? '#1976D2'
+                      : result === 'SCHEDULED' ? '#bbb'
+                        : '#757575'
+                }
+              ]}>
+                <Text style={styles.resultDisplayText}>
+                  {result === 'SCHEDULED' ? '예정' : result}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>경기장</Text>
+              <TextInput
+                style={[styles.input, isAutoFilled && styles.readOnlyInput]}
+                placeholder="Stadium"
+                value={stadium}
+                onChangeText={setStadium}
+                editable={!isAutoFilled}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>좌석 (직접 입력)</Text>
+              <TextInput
+                style={[styles.input, styles.activeInput]}
+                placeholder="예: 1루 응원석 105구역"
+                value={seat}
+                onChangeText={setSeat}
+                autoFocus={isAutoFilled}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: primaryColor }]}
+              onPress={handleSave}
+              disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>저장하기</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Game Selection Modal */}
@@ -711,5 +752,26 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#888',
     fontSize: 16,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    paddingVertical: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 20,
+    fontWeight: '600',
+  },
+  goScheduleButton: {
+    padding: 12,
+    marginTop: 10,
+  },
+  goScheduleText: {
+    fontSize: 14,
+    color: '#888',
+    textDecorationLine: 'underline',
   },
 });

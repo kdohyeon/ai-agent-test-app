@@ -95,7 +95,6 @@ export default function NewRecordScreen() {
       );
       getDocs(q).then(snapshot => {
         const gameKeys = new Set<string>();
-        // Key format: date (YYYY-MM-DD from formatted string)
         snapshot.forEach(doc => {
           const data = doc.data();
           if (data.date) {
@@ -104,6 +103,8 @@ export default function NewRecordScreen() {
           }
         });
         setRecordedGames(gameKeys);
+      }).catch(error => {
+        console.error('Error fetching recorded games:', error);
       });
     }, [])
   );

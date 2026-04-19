@@ -28,6 +28,7 @@ export default function ScheduleScreen() {
     const [monthlyGames, setMonthlyGames] = useState<{ date: string; data: Game[] }[]>([]); // Games filtered by month
     const [availableYears, setAvailableYears] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isError, setIsError] = useState(false);
     const [recordedGameDates, setRecordedGameDates] = useState<Set<string>>(new Set());
     const [months, setMonths] = useState<number[]>([]);
     const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -82,23 +83,27 @@ export default function ScheduleScreen() {
         const user = auth.currentUser;
         if (!user) return;
 
-        const q = query(
-            collection(db, 'records'),
-            where('userId', '==', user.uid)
-        );
-        const snapshot = await getDocs(q);
-        const dates = new Set<string>();
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.date) dates.add(data.date.split(' ')[0]); // Store YYYY-MM-DD
-        });
-        setRecordedGameDates(dates);
+        try {
+            const q = query(
+                collection(db, 'records'),
+                where('userId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            const dates = new Set<string>();
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.date) dates.add(data.date.split(' ')[0]);
+            });
+            setRecordedGameDates(dates);
+        } catch (error) {
+            console.error('Error fetching recorded games:', error);
+        }
     };
 
     const fetchGames = async () => {
         setLoading(true);
+        setIsError(false);
         try {
-            // Firestore index fix: Only sort by date in query, sort by time in client
             const q = query(collection(db, 'games'), orderBy('date', 'asc'));
             const querySnapshot = await getDocs(q);
             const fetchedGames: Game[] = [];
@@ -106,7 +111,6 @@ export default function ScheduleScreen() {
                 fetchedGames.push({ id: doc.id, ...doc.data() } as Game);
             });
 
-            // Client-side sort: primarily by date, secondarily by time
             fetchedGames.sort((a, b) => {
                 if (a.date !== b.date) return a.date.localeCompare(b.date);
                 return a.time.localeCompare(b.time);
@@ -114,15 +118,13 @@ export default function ScheduleScreen() {
 
             setGames(fetchedGames);
 
-            // Extract available years from games
             const years = Array.from(new Set(fetchedGames.map(g => g.date.split('-')[0]))).sort((a, b) => b.localeCompare(a));
-            // Ensure current year is always available
             const currentYear = new Date().getFullYear().toString();
             if (!years.includes(currentYear)) years.unshift(currentYear);
             setAvailableYears(years);
         } catch (error) {
             console.error('Error fetching games: ', error);
-            Alert.alert('오류', '데이터를 불러오는데 실패했습니다.');
+            setIsError(true);
         } finally {
             setLoading(false);
         }
@@ -232,6 +234,13 @@ export default function ScheduleScreen() {
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={primaryColor} />
                 </View>
+            ) : isError ? (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>경기 일정을 불러오지 못했습니다.</Text>
+                    <TouchableOpacity style={[styles.retryButton, { borderColor: primaryColor }]} onPress={fetchGames}>
+                        <Text style={[styles.retryButtonText, { color: primaryColor }]}>다시 시도</Text>
+                    </TouchableOpacity>
+                </View>
             ) : (
                 <View style={{ flex: 1 }}>
                     {/* Month Selector: Fixed 3~10 */}
@@ -315,6 +324,26 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingBottom: 20,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#666',
+    },
+    retryButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    retryButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
     },
     emptyContainer: {
         padding: 40,
